@@ -10,13 +10,14 @@ function onOpen() {
         .addItem('Set Current Cell as Trigger 1', 'setCurrentCellAsTrigger')
         .addItem('Set Current Cell as Trigger 2', 'setCurrentCellAsTrigger2')
         .addItem('Set Current Cell as Trigger 3', 'setCurrentCellAsTrigger3')
+        .addItem('Set Current Cell as Trigger 4', 'setCurrentCellAsTrigger4')
         .addSeparator()
         .addItem('Run Script 1 Manually', 'script1')
         .addItem('Run Script 2 Manually', 'script2')
         .addItem('Run Script 3 Manually', 'script3')
+        .addItem('Run Script 4 Manually', 'script4')
         .addSeparator()
         .addItem('Check Setup', 'checkSetup')
-        .addItem('Show Tutorial', 'showTutorial')
         .addToUi();
 }
 
@@ -33,12 +34,14 @@ function onEdit(e) {
     var triggerRange1;
     var triggerRange2;
     var triggerRange3;
+    var triggerRange4;
     try {
         triggerRange1 = ss.getRangeByName("TriggerCheckbox");
         triggerRange2 = ss.getRangeByName("TriggerCheckbox2");
         triggerRange3 = ss.getRangeByName("TriggerCheckbox3");
+        triggerRange4 = ss.getRangeByName("TriggerCheckbox4");
         
-        if (!triggerRange1 && !triggerRange2 && !triggerRange3) {
+        if (!triggerRange1 && !triggerRange2 && !triggerRange3 && !triggerRange4) {
             // Only log the error, don't show message box in onEdit trigger (would cause issues)
             Logger.log("No trigger checkboxes found. Please set up trigger checkboxes.");
             return;
@@ -55,6 +58,8 @@ function onEdit(e) {
         handleCheckboxChange(range, 2);
     } else if (triggerRange3 && range.getA1Notation() === triggerRange3.getA1Notation()) {
         handleCheckboxChange(range, 3);
+    } else if (triggerRange4 && range.getA1Notation() === triggerRange4.getA1Notation()) {
+        handleCheckboxChange(range, 4);
     }
 }
 
@@ -72,6 +77,8 @@ function handleCheckboxChange(range, triggerNumber) {
                 script2();
             } else if (triggerNumber === 3) {
                 script3();
+            } else if (triggerNumber === 4) {
+                script4();
             }
         } catch (error) {
             Logger.log("Error: " + error.toString());
@@ -146,8 +153,11 @@ function checkSetup() {
     var triggerRange1 = ss.getRangeByName("TriggerCheckbox");
     var triggerRange2 = ss.getRangeByName("TriggerCheckbox2");
     var triggerRange3 = ss.getRangeByName("TriggerCheckbox3");
+    var triggerRange4 = ss.getRangeByName("TriggerCheckbox4");
     var cellToIncrement = ss.getRangeByName("cellToIncrement");
     var cellToCopy = ss.getRangeByName("cellToCopy");
+    var rangeToCheck = ss.getRangeByName("rangeToCheck");
+    var rangeToClean2 = ss.getRangeByName("rangeToClean2");
     
     var message = "";
     
@@ -172,6 +182,13 @@ function checkSetup() {
         message += "✅ Trigger checkbox 3 is set to cell " + triggerRange3.getA1Notation() + "\n\n";
     }
     
+    if (!triggerRange4) {
+        message += "❌ Trigger checkbox 4 is not set up.\n" +
+                   "   Please use the 'Script Actions > Set Current Cell as Trigger 4' menu to configure it.\n\n";
+    } else {
+        message += "✅ Trigger checkbox 4 is set to cell " + triggerRange4.getA1Notation() + "\n\n";
+    }
+    
     if (!cellToIncrement) {
         message += "❌ 'cellToIncrement' named range is not set up.\n" +
                    "   Please create this named range for script2 to work properly.\n\n";
@@ -186,255 +203,109 @@ function checkSetup() {
         message += "✅ 'cellToCopy' named range is set to cell " + cellToCopy.getA1Notation() + "\n\n";
     }
     
+    if (!rangeToCheck || !rangeToClean2) {
+        message += "❌ 'rangeToCheck' or 'rangeToClean2' named range is not set up.\n" +
+                   "   Please create these named ranges for script4 to work properly.\n\n";
+    } else {
+        message += "✅ 'rangeToCheck' and 'rangeToClean2' named ranges are set up properly.\n\n";
+    }
+    
     ui.alert("Setup Status", message, ui.ButtonSet.OK);
 }
 
 /**
- * Sets the currently selected cell as the trigger and adds a checkbox to it
+ * Generic function to set the currently selected cell as a trigger and add a checkbox to it
+ * @param {number} triggerNumber - The trigger number (1, 2, 3, or 4)
+ */
+function setCurrentCellAsTriggerGeneric(triggerNumber) {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ui = SpreadsheetApp.getUi();
+    var currentCell = ss.getActiveRange();
+    var triggerName = "TriggerCheckbox" + (triggerNumber > 1 ? triggerNumber : "");
+    
+    // Check if a cell is selected
+    if (!currentCell || currentCell.getNumRows() > 1 || currentCell.getNumColumns() > 1) {
+        ui.alert(
+            'Selection Error',
+            'Please select a single cell before running this command.',
+            ui.ButtonSet.OK
+        );
+        return;
+    }
+    
+    // Check if named range already exists
+    var existingRange = ss.getRangeByName(triggerName);
+    if (existingRange) {
+        var response = ui.alert(
+            'Trigger Already Set',
+            'A trigger ' + (triggerNumber > 1 ? triggerNumber : "") + ' is already set at cell ' + existingRange.getA1Notation() + 
+            '. Do you want to change it to ' + currentCell.getA1Notation() + '?',
+            ui.ButtonSet.YES_NO
+        );
+        
+        if (response !== ui.Button.YES) {
+            ui.alert('Action Cancelled', 'The trigger cell was not changed.', ui.ButtonSet.OK);
+            return;
+        }
+        
+        // Remove existing named range
+        ss.removeNamedRange(triggerName);
+    }
+    
+    // Create named range for the trigger
+    ss.setNamedRange(triggerName, currentCell);
+    
+    // Insert checkbox in the cell
+    try {
+        // This is a workaround as there's no direct API to insert a checkbox
+        // We'll set the data validation to CHECKBOX type
+        var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+        currentCell.setDataValidation(rule);
+        
+        // Set initial value to false (unchecked)
+        currentCell.setValue(false);
+        
+        // Success message
+        ui.alert(
+            'Setup Complete',
+            'Cell ' + currentCell.getA1Notation() + ' is now set as your trigger ' + (triggerNumber > 1 ? triggerNumber : "") + '!\n\n' +
+            'When you check this box, script' + triggerNumber + ' will run and then automatically uncheck itself.',
+            ui.ButtonSet.OK
+        );
+    } catch (error) {
+        ui.alert(
+            'Error Setting Up Checkbox',
+            'The cell was set as a trigger, but there was an error adding the checkbox: ' + error.toString() + '\n\n' +
+            'Please manually add a checkbox to cell ' + currentCell.getA1Notation() + ' by selecting the cell and using Insert > Checkbox.',
+            ui.ButtonSet.OK
+        );
+    }
+}
+
+/**
+ * Sets the currently selected cell as the trigger 1 and adds a checkbox to it
  */
 function setCurrentCellAsTrigger() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var ui = SpreadsheetApp.getUi();
-    var currentCell = ss.getActiveRange();
-    
-    // Check if a cell is selected
-    if (!currentCell || currentCell.getNumRows() > 1 || currentCell.getNumColumns() > 1) {
-        ui.alert(
-            'Selection Error',
-            'Please select a single cell before running this command.',
-            ui.ButtonSet.OK
-        );
-        return;
-    }
-    
-    // Check if named range already exists
-    var existingRange = ss.getRangeByName("TriggerCheckbox");
-    if (existingRange) {
-        var response = ui.alert(
-            'Trigger Already Set',
-            'A trigger is already set at cell ' + existingRange.getA1Notation() + 
-            '. Do you want to change it to ' + currentCell.getA1Notation() + '?',
-            ui.ButtonSet.YES_NO
-        );
-        
-        if (response !== ui.Button.YES) {
-            ui.alert('Action Cancelled', 'The trigger cell was not changed.', ui.ButtonSet.OK);
-            return;
-        }
-        
-        // Remove existing named range
-        ss.removeNamedRange("TriggerCheckbox");
-    }
-    
-    // Create named range for the trigger
-    ss.setNamedRange("TriggerCheckbox", currentCell);
-    
-    // Insert checkbox in the cell
-    try {
-        // This is a workaround as there's no direct API to insert a checkbox
-        // We'll set the data validation to CHECKBOX type
-        var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-        currentCell.setDataValidation(rule);
-        
-        // Set initial value to false (unchecked)
-        currentCell.setValue(false);
-        
-        // Success message
-        ui.alert(
-            'Setup Complete',
-            'Cell ' + currentCell.getA1Notation() + ' is now set as your trigger!\n\n' +
-            'When you check this box, your script will run and then automatically uncheck itself.',
-            ui.ButtonSet.OK
-        );
-    } catch (error) {
-        ui.alert(
-            'Error Setting Up Checkbox',
-            'The cell was set as a trigger, but there was an error adding the checkbox: ' + error.toString() + '\n\n' +
-            'Please manually add a checkbox to cell ' + currentCell.getA1Notation() + ' by selecting the cell and using Insert > Checkbox.',
-            ui.ButtonSet.OK
-        );
-    }
+    setCurrentCellAsTriggerGeneric(1);
 }
 
 /**
- * Sets the currently selected cell as the second trigger and adds a checkbox to it
+ * Sets the currently selected cell as the trigger 2 and adds a checkbox to it
  */
 function setCurrentCellAsTrigger2() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var ui = SpreadsheetApp.getUi();
-    var currentCell = ss.getActiveRange();
-    
-    // Check if a cell is selected
-    if (!currentCell || currentCell.getNumRows() > 1 || currentCell.getNumColumns() > 1) {
-        ui.alert(
-            'Selection Error',
-            'Please select a single cell before running this command.',
-            ui.ButtonSet.OK
-        );
-        return;
-    }
-    
-    // Check if named range already exists
-    var existingRange = ss.getRangeByName("TriggerCheckbox2");
-    if (existingRange) {
-        var response = ui.alert(
-            'Trigger Already Set',
-            'A trigger 2 is already set at cell ' + existingRange.getA1Notation() + 
-            '. Do you want to change it to ' + currentCell.getA1Notation() + '?',
-            ui.ButtonSet.YES_NO
-        );
-        
-        if (response !== ui.Button.YES) {
-            ui.alert('Action Cancelled', 'The trigger cell was not changed.', ui.ButtonSet.OK);
-            return;
-        }
-        
-        // Remove existing named range
-        ss.removeNamedRange("TriggerCheckbox2");
-    }
-    
-    // Create named range for the trigger
-    ss.setNamedRange("TriggerCheckbox2", currentCell);
-    
-    // Insert checkbox in the cell
-    try {
-        // This is a workaround as there's no direct API to insert a checkbox
-        // We'll set the data validation to CHECKBOX type
-        var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-        currentCell.setDataValidation(rule);
-        
-        // Set initial value to false (unchecked)
-        currentCell.setValue(false);
-        
-        // Success message
-        ui.alert(
-            'Setup Complete',
-            'Cell ' + currentCell.getA1Notation() + ' is now set as your trigger 2!\n\n' +
-            'When you check this box, script2 will run and then automatically uncheck itself.',
-            ui.ButtonSet.OK
-        );
-    } catch (error) {
-        ui.alert(
-            'Error Setting Up Checkbox',
-            'The cell was set as a trigger, but there was an error adding the checkbox: ' + error.toString() + '\n\n' +
-            'Please manually add a checkbox to cell ' + currentCell.getA1Notation() + ' by selecting the cell and using Insert > Checkbox.',
-            ui.ButtonSet.OK
-        );
-    }
+    setCurrentCellAsTriggerGeneric(2);
 }
 
 /**
- * Sets the currently selected cell as the third trigger and adds a checkbox to it
+ * Sets the currently selected cell as the trigger 3 and adds a checkbox to it
  */
 function setCurrentCellAsTrigger3() {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var ui = SpreadsheetApp.getUi();
-    var currentCell = ss.getActiveRange();
-    
-    // Check if a cell is selected
-    if (!currentCell || currentCell.getNumRows() > 1 || currentCell.getNumColumns() > 1) {
-        ui.alert(
-            'Selection Error',
-            'Please select a single cell before running this command.',
-            ui.ButtonSet.OK
-        );
-        return;
-    }
-    
-    // Check if named range already exists
-    var existingRange = ss.getRangeByName("TriggerCheckbox3");
-    if (existingRange) {
-        var response = ui.alert(
-            'Trigger Already Set',
-            'A trigger 3 is already set at cell ' + existingRange.getA1Notation() + 
-            '. Do you want to change it to ' + currentCell.getA1Notation() + '?',
-            ui.ButtonSet.YES_NO
-        );
-        
-        if (response !== ui.Button.YES) {
-            ui.alert('Action Cancelled', 'The trigger cell was not changed.', ui.ButtonSet.OK);
-            return;
-        }
-        
-        // Remove existing named range
-        ss.removeNamedRange("TriggerCheckbox3");
-    }
-    
-    // Create named range for the trigger
-    ss.setNamedRange("TriggerCheckbox3", currentCell);
-    
-    // Insert checkbox in the cell
-    try {
-        // This is a workaround as there's no direct API to insert a checkbox
-        // We'll set the data validation to CHECKBOX type
-        var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-        currentCell.setDataValidation(rule);
-        
-        // Set initial value to false (unchecked)
-        currentCell.setValue(false);
-        
-        // Success message
-        ui.alert(
-            'Setup Complete',
-            'Cell ' + currentCell.getA1Notation() + ' is now set as your trigger 3!\n\n' +
-            'When you check this box, script3 will run and then automatically uncheck itself.',
-            ui.ButtonSet.OK
-        );
-    } catch (error) {
-        ui.alert(
-            'Error Setting Up Checkbox',
-            'The cell was set as a trigger, but there was an error adding the checkbox: ' + error.toString() + '\n\n' +
-            'Please manually add a checkbox to cell ' + currentCell.getA1Notation() + ' by selecting the cell and using Insert > Checkbox.',
-            ui.ButtonSet.OK
-        );
-    }
+    setCurrentCellAsTriggerGeneric(3);
 }
 
 /**
- * Shows a tutorial dialog explaining how to use the script
+ * Sets the currently selected cell as the trigger 4 and adds a checkbox to it
  */
-function showTutorial() {
-    var ui = SpreadsheetApp.getUi();
-    
-    var htmlOutput = HtmlService
-        .createHtmlOutput(
-            '<style>' +
-            '  body { font-family: Arial, sans-serif; }' +
-            '  h3 { color: #555; }' +
-            '  p { color: #666; }' +
-            '  ul { color: #666; }' +
-            '  ol { color: #666; }' +
-            '  li { color: #666; }' +
-            '  code { color: #333; background-color: #f5f5f5; padding: 2px 4px; border-radius: 3px; }' +
-            '</style>' +
-            '<body>' +
-            '<p>This script allows you to run actions automatically by checking checkboxes in your spreadsheet.</p>' +
-            '<h3>Quick Setup</h3>' +
-            '<ol>' +
-            '  <li>Select the cell where you want to place your first trigger checkbox</li>' +
-            '  <li>Click on <b>Script Actions > Set Current Cell as Trigger 1</b></li>' +
-            '  <li>A checkbox will be added to the selected cell</li>' +
-            '  <li>When you check this box, script1 will run and then automatically uncheck itself</li>' +
-            '  <li>Repeat the process with <b>Script Actions > Set Current Cell as Trigger 2</b> for the second trigger</li>' +
-            '  <li>Create a named range called "cellToIncrement" for script2 to work properly</li>' +
-            '  <li>Repeat the process with <b>Script Actions > Set Current Cell as Trigger 3</b> for the third trigger</li>' +
-            '  <li>Create a named range called "cellToCopy" for script3 to work properly</li>' +
-            '</ol>' +
-            '<h3>How It Works</h3>' +
-            '<ul>' +
-            '  <li>The script watches for changes to the checkbox cells</li>' +
-            '  <li>When a checkbox is checked, it runs the corresponding script</li>' +
-            '  <li>After running, it automatically unchecks the box</li>' +
-            '  <li>Trigger 1 runs script1 which clears the "RangeToClean" named range</li>' +
-            '  <li>Trigger 2 runs script2 which increments the value in the "cellToIncrement" named range</li>' +
-            '  <li>Trigger 3 runs script3 which copies the value from "cellToCopy" to the first empty cell in its column</li>' +
-            '</ul>' +
-            '<h3>Customizing the Script</h3>' +
-            '<p>To change what happens when the checkboxes are checked, edit the <code>script1()</code>, <code>script2()</code>, and <code>script3()</code> functions in the script editor.</p>' +
-            '</body>'
-        )
-        .setWidth(450)
-        .setHeight(500);
-    
-    ui.showModalDialog(htmlOutput, 'Checkbox Trigger Tutorial');
+function setCurrentCellAsTrigger4() {
+    setCurrentCellAsTriggerGeneric(4);
 }

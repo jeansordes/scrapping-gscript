@@ -9,15 +9,17 @@ function script1() {
 
     // Clear the RangeToClean named range
     try {
-        var rangeToClean = ss.getRangeByName("RangeToClean");
-        if (rangeToClean) {
-            rangeToClean.clearContent();
-            Logger.log("RangeToClean has been cleared");
+        var rangeToClean1 = ss.getRangeByName("RangeToClean1");
+        var rangeToClean2 = ss.getRangeByName("RangeToClean2");
+        if (rangeToClean1 && rangeToClean2) {
+            rangeToClean1.clearContent();
+            rangeToClean2.clearContent();
+            Logger.log("RangeToClean1 and RangeToClean2 have been cleared");
         } else {
-            Logger.log("RangeToClean named range not found");
+            Logger.log("RangeToClean1 or RangeToClean2 named range not found");
         }
     } catch (error) {
-        Logger.log("Error clearing RangeToClean: " + error);
+        Logger.log("Error clearing RangeToClean1 or RangeToClean2: " + error);
     }
 }
 
@@ -95,5 +97,70 @@ function script3() {
         
     } catch (error) {
         Logger.log("Error in script3: " + error);
+    }
+}
+
+/**
+ * This script will check "rangeToClean2", and if a cell shows "Terminé", and the cell on the same row in the column "ErrorWithLine" is not empty, it will clear the cell in "rangeToClean2"
+ */
+function script4() {
+    Logger.log("Script 4 started");
+    
+    // Get the active spreadsheet
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    try {
+        // Get the rangeToClean2
+        var rangeToClean2 = ss.getRangeByName("rangeToClean2");
+        if (!rangeToClean2) {
+            Logger.log("rangeToClean2 named range not found");
+            return;
+        }
+        
+        // Get the sheet and range information
+        var sheet = rangeToClean2.getSheet();
+        var startRow = rangeToClean2.getRow();
+        var startCol = rangeToClean2.getColumn();
+        var numRows = rangeToClean2.getNumRows();
+        var numCols = rangeToClean2.getNumColumns();
+        
+        // Get the ErrorWithLine column
+        var errorWithLineRange = ss.getRangeByName("ErrorWithLine");
+        if (!errorWithLineRange) {
+            Logger.log("ErrorWithLine named range not found");
+            return;
+        }
+        var errorCol = errorWithLineRange.getColumn();
+        
+        // Get all values from rangeToClean2
+        var values = rangeToClean2.getValues();
+        var modified = false;
+        
+        // Check each cell in rangeToClean2
+        for (var i = 0; i < numRows; i++) {
+            for (var j = 0; j < numCols; j++) {
+                // Check if the cell contains "Terminé"
+                if (values[i][j] === "Terminé") {
+                    // Get the corresponding row in the sheet
+                    var currentRow = startRow + i;
+                    
+                    // Check if the ErrorWithLine cell in the same row is not empty
+                    var errorCellValue = sheet.getRange(currentRow, errorCol).getValue();
+                    if (errorCellValue !== "") {
+                        // Clear the cell in rangeToClean2
+                        sheet.getRange(currentRow, startCol + j).clearContent();
+                        Logger.log("Cleared cell at row " + currentRow + ", column " + (startCol + j) + " because ErrorWithLine is not empty");
+                        modified = true;
+                    }
+                }
+            }
+        }
+        
+        if (!modified) {
+            Logger.log("No cells were cleared in rangeToClean2");
+        }
+        
+    } catch (error) {
+        Logger.log("Error in script4: " + error);
     }
 }
